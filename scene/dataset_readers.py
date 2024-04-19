@@ -32,6 +32,7 @@ class CameraInfo(NamedTuple):
     #cx: int
     #cy: int
     image: np.array
+    #mask: np.array
     image_path: str
     image_name: str
     width: int
