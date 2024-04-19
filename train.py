@@ -10,6 +10,7 @@
 #
 
 import os
+import cv2
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim
@@ -93,6 +94,23 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         loss.backward()
 
         iter_end.record()
+
+        # save images --> gt, rendered to validate correct projection
+        # based on iteration number
+        if iteration % 1000 == 0:
+            print ("gt_image shape: ", gt_image.shape)
+            print ("image shape: ", image.shape)
+            print (torch.max(gt_image), torch.min(gt_image))
+            print (torch.max(image), torch.min(image))
+            gt_image = torch.clamp(gt_image, 0.0, 1.0)
+            gt_image_np = gt_image.cpu().detach().numpy()
+            gt_image_np = gt_image_np.transpose(1, 2, 0)
+            image = torch.clamp(image, 0.0, 1.0)
+            image_np = image.cpu().detach().numpy()
+            image_np = image_np.transpose(1, 2, 0)
+
+            cv2.imwrite(f"gt_{iteration}.png", gt_image_np*255)
+            cv2.imwrite(f"rendered_{iteration}.png", image_np*255)
 
         with torch.no_grad():
             # Progress bar

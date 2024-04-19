@@ -29,6 +29,8 @@ class CameraInfo(NamedTuple):
     T: np.array
     FovY: np.array
     FovX: np.array
+    cx: int
+    cy: int
     image: np.array
     image_path: str
     image_name: str
@@ -98,8 +100,14 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         image_name = os.path.basename(image_path).split(".")[0]
         image = Image.open(image_path)
 
+        cx = width // 2
+        cy = height // 2
+
+        #cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, cx=cx, cy=cy, image=image,
+        #                      image_path=image_path, image_name=image_name, width=width, height=height)
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height)
+
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
@@ -181,6 +189,62 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
+        #fovx = contents["camera_angle_x"] commented by SID
+
+        frames = contents["frames"]
+        for idx, frame in enumerate(frames):
+            cam_name = os.path.join(path, frame["file_path"] + extension)
+            mask_path = os.path.join(path, frame["mask_path"] + '.png')
+
+            # NeRF 'transform_matrix' is a camera-to-world transform
+            c2w = np.array(frame["transform_matrix"])
+            #print ("c2w ", c2w.shape)
+            # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
+            c2w[:3, 1:3] *= -1
+
+            # get the world-to-camera transform and set R, T
+            w2c = np.linalg.inv(c2w)
+            R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
+            T = w2c[:3, 3]
+
+            R = np.array(frame["transform_matrix"])[:3, :3]
+            T = np.array(frame["transform_matrix"])[:3, 3]
+
+            image_path = os.path.join(path, cam_name)
+            image_name = Path(cam_name).stem
+            image = Image.open(image_path)
+
+            mask = Image.open(mask_path)
+
+            im_data = np.array(image.convert("RGBA"))
+            mask_data = np.array(mask)
+
+            bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
+
+            norm_data = im_data / 255.0
+            arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+
+            fovx = frame["camera_angle_x"]
+            fovy = frame["camera_angle_y"]
+            cx = frame["camera_cx"]
+            cy = frame["camera_cy"]
+            #fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])  commented by SID
+            FovY = fovy 
+            FovX = fovx
+
+            cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, cx=cx, cy=cy, image=image,
+                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+            #cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, cx=cx, cy=cy, image=image, mask=mask,
+            #                image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+            
+    return cam_infos
+
+def readCamerasFromTransforms_original(path, transformsfile, white_background, extension=".png"):
+    cam_infos = []
+
+    with open(os.path.join(path, transformsfile)) as json_file:
+        contents = json.load(json_file)
         fovx = contents["camera_angle_x"]
 
         frames = contents["frames"]
@@ -218,7 +282,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             
     return cam_infos
 
-def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
+def readNerfSyntheticInfo(path, white_background, eval, extension=".jpg"): #extension=".png"):
     print("Reading Training Transforms")
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
     print("Reading Test Transforms")
