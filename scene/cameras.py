@@ -28,8 +28,8 @@ class Camera(nn.Module):
         self.T = T
         self.FoVx = FoVx
         self.FoVy = FoVy
-        self.cx = cx
-        self.cy = cy
+        #self.cx = cx
+        #self.cy = cy
         self.image_name = image_name
 
         try:
@@ -56,7 +56,7 @@ class Camera(nn.Module):
 
         self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1).cuda()
         #self.projection_matrix = getProjectionMatrix_(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy, cx=self.cx, cy=self.cy, w=self.image_width, h=self.image_height).transpose(0,1).cuda()
-        self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FovY, w=self.image_width, h=self.image_height).transpose(0,1).cuda()
+        self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy, w=self.image_width, h=self.image_height).transpose(0,1).cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
 
